@@ -4,9 +4,8 @@ import random
 import datetime
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Star, register
-from email.policy import default
 
-@register("IDUtil", "ZvZPvz", "生成/验证身份证号码插件", "1.0.0")
+@register("IDUtil", "ZvZPvz", "生成/驗證身份證號碼插件", "1.0.0")
 class IDUtil(Star): 
     
     # --- 內部數據池 ---
@@ -14,13 +13,48 @@ class IDUtil(Star):
     _HKID_YEAR_MAP = {
         (1980, 1988): "Z",
         (1989, 2005): "Y", # 截至 2005 年 3 月
-        (2005, 2019): "S", # 自 2005 年 4 月起
-        (2019, 2048): "N", # 自 2019 年 6 月起
+        (2005, 2019): "S", # 截至 2019 年 6 月
+        (2019, 9999): "N", # 自 2019 年 6 月起 (根據用戶提供更新)
     }
     # 香港首次登記字母 (非出生)
     _HKID_REG_LETTERS = ["K", "P", "R", "M", "F"]
-    # 中國大陸地址碼池 (用於隨機生成)
-    _CNID_AREA_POOL = ["110101", "310101", "440101", "440301", "510101"]
+    
+    # 根據用戶提供的資料大幅擴展地址碼池
+    _CNID_AREA_POOL = [
+        # 華北 (1x)
+        "110101", # 北京市 東城區
+        "110105", # 北京市 朝陽區
+        "120101", # 天津市 和平區
+        "130102", # 河北省 石家莊市 長安區
+        "140105", # 山西省 太原市 小店區
+        # 東北 (2x)
+        "210102", # 遼寧省 瀋陽市 和平區
+        "210202", # 遼寧省 大連市 中山區
+        "220102", # 吉林省 長春市 南關區
+        "230102", # 黑龍江省 哈爾濱市 道里區
+        # 華東 (3x)
+        "310101", # 上海市 黃浦區
+        "310106", # 上海市 靜安區
+        "320102", # 江蘇省 南京市 玄武區
+        "320502", # 江蘇省 蘇州市 姑蘇區
+        "330102", # 浙江省 杭州市 上城區
+        "370102", # 山東省 濟南市 歷下區
+        "370202", # 山東省 青島市 市南區
+        # 中南 (4x)
+        "410102", # 河南省 鄭州市 中原區
+        "420102", "420111", # 湖北省 武漢市 江岸區 / 洪山區 (城郊範例)
+        "430102", # 湖南省 長沙市 芙蓉區
+        "440103", # 廣東省 廣州市 荔灣區
+        "440303", # 廣東省 深圳市 羅湖區
+        # 西南 (5x)
+        "500103", # 重慶市 渝中區
+        "510104", # 四川省 成都市 錦江區
+        "520102", # 貴州省 貴陽市 南明區
+        # 西北 (6x)
+        "610102", # 陝西省 西安市 新城區
+        "620102", # 甘肅省 蘭州市 城關區
+        "650102", # 新疆 維吾爾自治區 烏魯木齊市 天山區
+    ]
 
     # --- 幫助文檔 (v1.0.0) ---
     HELP_TEXT = """# 身份證號碼工具 (IDUtil) v1.0.0
@@ -60,7 +94,9 @@ class IDUtil(Star):
 - `/id_util gen_hk 1985`: 生成香港ID，出生年份為1985。
 - `/id_util gen_hk K`: 生成香港ID，指定字母為K。
 - `/id_util sum_cn 11010219840406970`: 計算中國大陸ID的校驗碼。
+- `/id_util sum_hk G123456`: 計算香港ID的校驗碼。
 - `/id_util validate_cn 11010219840406970X`: 驗證中國大陸ID。
+- `/id_util validate_hk C123456(9)`: 驗證香港ID。
 """
 
     def _get_hkid_letter_val(self, char: str) -> int:
@@ -137,7 +173,7 @@ class IDUtil(Star):
         else:
             return False, f"無效 (校驗碼應為 {expected_full_id[-1]})"
 
-    # --- (新) 號碼生成 (Gen) 邏輯 ---
+    # --- 號碼生成 (Gen) 邏輯 ---
 
     def _gen_cnid(self, yyyymmdd: str, sex: str = None):
         """生成中國大陸ID"""
@@ -146,6 +182,7 @@ class IDUtil(Star):
         except ValueError:
             return None, "日期格式錯誤 (應為 YYYYMMDD)"
         
+        # 從擴展池中隨機選取
         area = random.choice(self._CNID_AREA_POOL)
         
         # 順序碼 (3位)
@@ -163,7 +200,7 @@ class IDUtil(Star):
         
         body = area + yyyymmdd + seq_str
         full_id = self._calculate_cnid_checksum(body)
-        return full_id, f"生成成功 (地區: {area}, 順序碼: {seq_str}, 性別: {sex or '隨機'})"
+        return full_id, f"生成成功 (隨機地區: {area}, 順序碼: {seq_str}, 性別: {sex or '隨機'})"
 
     def _gen_hkid(self, prefix_input: str):
         """生成香港ID"""
@@ -180,7 +217,7 @@ class IDUtil(Star):
             if not found:
                 if year < 1980:
                     return None, f"年份 {year} 太早，請使用首次登記字母 (如 K, P, R, M, F) 或 1980 年後的年份。"
-                else: # 備用
+                else: # 備用 (例如 2049 年後)
                      letter = "N"
         
         elif re.fullmatch(r'^[A-Z]{1,2}$', prefix_input.upper()):
@@ -209,7 +246,7 @@ class IDUtil(Star):
 
         command = arg1.lower()
         
-        if command not in ["gen_cn", "gen_hk", "sum_cn", "sum_hk", "validate_cn", "validate_hk"]:
+        if not arg2 and command in ["gen_cn", "gen_hk", "sum_cn", "sum_hk", "validate_cn", "validate_hk"]:
             yield event.plain_result(f"請提供必要的參數。\n使用 `/id_util help` 查看幫助。")
             return
 
@@ -234,11 +271,11 @@ class IDUtil(Star):
 
             # --- Sum ---
             elif command == "sum_cn":
-                if not re.fullmatch(r'^\d{17}$', value):
-                     yield event.plain_result(f"錯誤: 格式錯誤 (應為 17 位數字)")
-                     return
                 result = self._calculate_cnid_checksum(value)
-                yield event.plain_result(f"中國大陸ID (17位本體): {value}\n計算結果 (完整號碼): {result}")
+                if result:
+                    yield event.plain_result(f"中国大陆ID (17位本體): {value}\n計算結果 (完整號碼): {result}")
+                else:
+                    yield event.plain_result(f"錯誤: 格式錯誤 (應為 17 位數字)")
 
             elif command == "sum_hk":
                 result, msg = self._calculate_hkid_checksum(value)
