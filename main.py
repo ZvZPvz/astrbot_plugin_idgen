@@ -86,8 +86,8 @@ class IDUtil(Star):
         vals.extend([int(d) for d in digits])
         weights = [9, 8, 7, 6, 5, 4, 3, 2]
         
-        sum_of_mods = sum((vals[i] * weights[i]) % 11 for i in range(8))
-        remainder = sum_of_mods % 11
+        total_sum = sum(vals[i] * weights[i] for i in range(8))
+        remainder = total_sum % 11
         
         if remainder == 0:
             checksum = '0'
