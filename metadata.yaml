@@ -1,0 +1,6 @@
+name: astrbot_plugin_idgen
+desc: 生成/验证身份证号码插件
+help: 输入 /id_util 查看关键词回复帮助。
+version: v1.0.0
+author: ZvZPvz
+repo: 
